@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Struk Kasir — Demo Rapi Tengah</title>
+  <style>
+    body {
+      margin: 0;
+      background: #f4f6f8;
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      padding: 20px;
+    }
+    .container { max-width: 1200px; width: 100%; }
+    header {
+      display: flex; justify-content: space-between; flex-wrap: wrap;
+      align-items: center; margin-bottom: 15px;
+    }
+    h1 { font-size: 20px; margin: 0; }
+    .controls { display: flex; gap: 8px; flex-wrap: wrap; }
+    button {
+      padding: 8px 12px; border: none; border-radius: 5px;
+      cursor: pointer; font-weight: bold;
+    }
+    button.primary { background: #1565c0; color: #fff; }
+    button.secondary { background: #eee; color: #1565c0; }
+
+    section { display: flex; gap: 20px; flex-wrap: wrap; }
+    .card {
+      background: #fff; padding: 15px; border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+    .left-panel { flex: 1; min-width: 400px; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+    input { padding: 6px; border: 1px solid #ccc; border-radius: 5px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td {
+      padding: 6px; font-size: 14px; border-bottom: 1px dashed #ccc;
+    }
+    th { background: #f8f8f8; }
+
+    /* Struk */
+    .right-panel {
+      flex: 1;
+      display: flex;
+      justify-content: center; /* selalu di tengah */
+    }
+    .receipt {
+      font-family: "Courier New", monospace;
+      background: #fff; padding: 10px;
+      border: 1px solid #ddd; font-size: 12px;
+      line-height: 1.4;
+      width: 80mm; /* selalu ukuran thermal */
+      margin: 0 auto; /* center */
+    }
+    .receipt .center { text-align: center; }
+    .receipt .title { font-weight: bold; font-size: 14px; }
+    .receipt .divider { border-top: 1px dashed #000; margin: 6px 0; }
+    .receipt .line { display: flex; justify-content: space-between; }
+    .receipt .totals .line { font-weight: bold; }
+    .receipt .meta { text-align: center; margin-top: 8px; font-size: 11px; }
+
+    /* --- PRINT MODE --- */
+    @media print {
+      body {
+        background: #fff;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        padding: 0;
+      }
+      body * { visibility: hidden; }
+      .receipt, .receipt * {
+        visibility: visible;
+      }
+      .receipt {
+        margin: 0 auto;
+        border: none;
+        width: 80mm;
+        font-size: 12px;
+      }
+      @page { size: 80mm auto; margin: 4mm; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Struk Kasir</h1>
+      <div class="controls">
+        <button id="loadSample" class="secondary">Muat Contoh</button>
+        <button id="printBtn" class="primary">Print / Simpan PDF</button>
+      </div>
+    </header>
+
+    <section>
+      <!-- Input -->
+      <div class="card left-panel">
+        <div class="row">
+          <input id="itemName" type="text" placeholder="Nama barang" />
+          <input id="itemQty" type="number" min="1" value="1" />
+          <input id="itemPrice" type="number" min="0" value="0" />
+          <button id="addItem" class="primary">Tambah</button>
+        </div>
+
+        <table>
+          <thead>
+            <tr><th>Nama</th><th>Qty</th><th>Harga</th><th>Total</th><th></th></tr>
+          </thead>
+          <tbody id="itemsBody"></tbody>
+        </table>
+
+        <div class="row">
+          <label>PPN % <input id="taxPct" type="number" value="11" style="width:60px"></label>
+          <label>Diskon % <input id="discPct" type="number" value="0" style="width:60px"></label>
+          <label>Tunai <input id="cash" type="number" value="0" style="width:100px"></label>
+          <button id="recalc" class="secondary">Re-hitung</button>
+        </div>
+      </div>
+
+      <!-- Struk -->
+      <div class="right-panel">
+        <div class="receipt" id="receiptPreview">
+          <div class="center title">TOKO CONTOH</div>
+          <div class="center">Jl. Contoh No.1 - Telp. 021-000000</div>
+          <div class="center">Tanggal: <span id="rDate"></span></div>
+          <div class="center">No. Struk: <span id="rInvoice"></span></div>
+          <div class="divider"></div>
+
+          <div id="receiptItems"></div>
+          <div class="divider"></div>
+
+          <div class="line"><div>Jumlah Item</div><div id="rItemCount">0</div></div>
+          <div class="line"><div>Subtotal</div><div id="rSubtotal">Rp 0</div></div>
+          <div class="line"><div>PPN (<span id="rTaxPct">0</span>%)</div><div id="rTax">Rp 0</div></div>
+          <div class="line"><div>Diskon</div><div id="rDisc">Rp 0</div></div>
+          <div class="line totals"><div>Total</div><div id="rTotal">Rp 0</div></div>
+
+          <div class="divider"></div>
+          <div class="line"><div>Tunai</div><div id="rCash">Rp 0</div></div>
+          <div class="line"><div>Kembali</div><div id="rChange">Rp 0</div></div>
+
+          <div class="meta">
+            Terima kasih telah berbelanja!<br>
+            Barang yang sudah dibeli tidak dapat dikembalikan<br>
+            kecuali ada kesepakatan.
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const rupiah = (v) => "Rp " + (Number(v)||0).toLocaleString("id-ID");
+    const money = (v) => Math.round((Number(v)||0)*100)/100;
+    let items = [];
+    const el = (id) => document.getElementById(id);
+
+    const generateInvoice = () => {
+      const now = new Date();
+      return "INV-" + now.getTime();
+    };
+
+    function renderItems(){
+      const tbody = el("itemsBody"); tbody.innerHTML="";
+      items.forEach(it=>{
+        const tr=document.createElement("tr");
+        tr.innerHTML=`
+          <td>${it.name}</td>
+          <td>${it.qty}</td>
+          <td>${rupiah(it.price)}</td>
+          <td>${rupiah(it.qty*it.price)}</td>
+          <td><button data-id="${it.id}" class="secondary">X</button></td>`;
+        tbody.appendChild(tr);
+      });
+
+      document.querySelectorAll("button[data-id]").forEach(b=>{
+        b.onclick=(e)=>{items=items.filter(x=>x.id!==e.target.dataset.id);recalc();}
+      });
+
+      const rItems=el("receiptItems"); rItems.innerHTML="";
+      items.forEach(it=>{
+        const div=document.createElement("div");
+        div.className="line";
+        div.innerHTML=`<div>${it.name} x${it.qty} @${rupiah(it.price)}</div><div>${rupiah(it.qty*it.price)}</div>`;
+        rItems.appendChild(div);
+      });
+    }
+
+    function recalc(){
+      renderItems();
+      const subtotal=items.reduce((s,i)=>s+i.qty*i.price,0);
+      const itemCount=items.reduce((s,i)=>s+i.qty,0);
+      const taxPct=Number(el("taxPct").value)||0;
+      const discPct=Number(el("discPct").value)||0;
+      const tax=money(subtotal*(taxPct/100));
+      const disc=money(subtotal*(discPct/100));
+      const total=money(subtotal+tax-disc);
+      const cash=Number(el("cash").value)||0;
+      const change=money(Math.max(0,cash-total));
+
+      el("rSubtotal").textContent=rupiah(subtotal);
+      el("rTaxPct").textContent=taxPct;
+      el("rTax").textContent=rupiah(tax);
+      el("rDisc").textContent=rupiah(disc);
+      el("rTotal").textContent=rupiah(total);
+      el("rCash").textContent=rupiah(cash);
+      el("rChange").textContent=rupiah(change);
+      el("rItemCount").textContent=itemCount;
+      el("rDate").textContent=new Date().toLocaleString("id-ID",{dateStyle:"short", timeStyle:"short"});
+      el("rInvoice").textContent=generateInvoice();
+    }
+
+    el("addItem").onclick=()=>{
+      const name=el("itemName").value.trim();
+      if(!name) return alert("Nama barang kosong");
+      const qty=Number(el("itemQty").value)||1;
+      const price=Number(el("itemPrice").value)||0;
+      items.push({id:Date.now()+"",name,qty,price});
+      el("itemName").value="";el("itemQty").value=1;el("itemPrice").value=0;
+      recalc();
+    };
+
+    el("recalc").onclick=recalc;
+    el("printBtn").onclick=()=>window.print();
+    el("loadSample").onclick=()=>{
+      items=[
+        {id:"1",name:"Nasi Goreng",qty:1,price:15000},
+        {id:"2",name:"Teh Manis",qty:2,price:5000},
+        {id:"3",name:"Ayam Geprek",qty:1,price:20000},
+      ];
+      el("cash").value=50000;
+      recalc();
+    };
+
+    recalc();
+  </script>
+</body>
+</html>
